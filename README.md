@@ -8,6 +8,9 @@ Hercules environment:
   optionally configures passwordless sudo and an SSH firewall allowance.
 - [`scripts/install-hercules.sh`](scripts/install-hercules.sh) builds and installs
   SDL Hercules Hyperion and reboots automatically after successful verification.
+- [`scripts/configure-tnftp-apparmor.sh`](scripts/configure-tnftp-apparmor.sh)
+  allows the Linux FTP client to save directly into `/mainframe/ftp` while keeping
+  its AppArmor profile enforced.
 
 Startup and operations notes:
 
@@ -173,17 +176,98 @@ rewrite Hercules configuration, or start the emulator. Package installation and
 installation under `/usr/local` are not transactional; if a step fails, inspect
 the error before rerunning.
 
+## Allow FTP downloads into /mainframe/ftp
+
+On Lubuntu, run this once from the repository checkout:
+
+```bash
+sudo bash scripts/configure-tnftp-apparmor.sh
+```
+
+This fixes a local download failure such as:
+
+```text
+125 Sending data set IBMUSER.HELLO.HI FIXrecfm 80
+ftp: Can't open `HELLO.HI': Permission denied
+```
+
+In our environment, the kernel logged an AppArmor denial for the `tnftp` client
+creating `/mainframe/ftp/HELLO.HI`, even though FTP was running as root. The script
+adds the following persistent exception to `/etc/apparmor.d/local/tnftp`:
+
+```text
+owner /mainframe/ftp/ r,
+owner /mainframe/ftp/* rw,
+```
+
+The rules permit directory reads and owner-only file reads/writes directly inside
+`/mainframe/ftp`. They do not cover nested directories. Linux ownership and mode
+permissions still apply; an existing root-owned `0755` directory remains writable
+only by root. The script creates the directory with mode `0755` if it is missing,
+and preserves existing directory permissions.
+
+The script preserves other local rules, avoids duplicate entries on reruns,
+validates the complete candidate policy before installing it, reloads only the
+`tnftp` profile, and checks that it remains in enforce mode. It uses Ubuntu's
+[local override mechanism](https://ubuntu.com/server/docs/changing-package-files/)
+and preserves the packaged `/etc/apparmor.d/tnftp` file. It requires the existing
+profile to be loaded in enforce mode and to include `local/tnftp`; it does not
+install packages, disable AppArmor, or change the profile to complain mode.
+
+Before changing an override, it saves the original profile and any previous
+override under `/var/backups/tnftp-apparmor.<timestamp>.<random>/`. That directory
+also contains `restore.txt` describing how to restore the prior state. A failed
+reload or enforce-mode check restores the previous override, or removes the new
+override if none existed, and attempts to reload the restored policy. Directory
+creation and backup files are retained if a later step fails. Symlinked policy
+files and destination directories are rejected.
+
+After configuration, run these commands **on Linux** to connect to the z/OS FTP
+server. `192.168.140.200` is the guest's TCP/IP address; `192.168.140.196` is the
+Lubuntu host providing the Hercules terminal connection.
+
+```bash
+ftp 192.168.140.200
+```
+
+Log in with your z/OS account, then enter at the `ftp>` prompt:
+
+```text
+lcd /mainframe/ftp
+ascii
+get 'IBMUSER.HELLO.HI' HELLO.HI
+bye
+```
+
+Replace the data set name with your own. `ascii` is for JCL, source, and other
+text; it requests EBCDIC-to-ASCII conversion. The sample is a sequential data
+set. To retrieve a PDS member, use a name such as `'IBMUSER.TEST.JCL(HELLO)'`.
+`lcd` chooses the local Linux directory; `cd` changes the remote z/OS location.
+An existing local file with the requested output name can be overwritten by
+`get`. See [IBM's FTP examples](https://www.ibm.com/docs/en/zos/2.5.0?topic=ftp-examples-get-mget-mvsget-subcommands)
+for data set and member transfers.
+
 ## Validation
 
 The regression checks run in temporary directories without changing real users,
-SSH services, firewall rules, or sudoers files. Hercules build tests also mock
-package installation, compilation, system installation, and reboot. They require
+SSH services, firewall rules, sudoers files, or AppArmor policy. Hercules build
+tests also mock package installation, compilation, system installation, and
+reboot. AppArmor tests mock the policy parser/reloader and exercise failure
+recovery in isolated fixtures. If `apparmor_parser` is installed, they also
+validate generated fixture policies with the native parser and kernel loading
+disabled. They require
 Bash, OpenSSH's `ssh-keygen`, and standard Unix utilities:
 
 ```bash
 bash -n scripts/setup-codex-ssh.sh
 bash -n scripts/install-hercules.sh
+bash -n scripts/configure-tnftp-apparmor.sh
 bash tests/setup-codex-ssh.test.sh
 bash tests/install-hercules.test.sh
+bash tests/configure-tnftp-apparmor.test.sh
 shellcheck scripts/*.sh tests/*.sh
 ```
+
+The [Shell checks workflow](.github/workflows/shell-checks.yml) runs these checks
+on Ubuntu, including the native AppArmor parser validation. Its fixture tests do
+not load policy into the runner's kernel.
