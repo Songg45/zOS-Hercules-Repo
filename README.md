@@ -14,6 +14,9 @@ Hercules environment:
 
 Startup and operations notes:
 
+- [DUZA.TCPPARMS network configuration](docs/duza-tcpparms-networking.md): the
+  working LCS profile, guest address and routes, the corrected device/link typo,
+  and the startup and connectivity results.
 - [z/OS 1.10 startup reference](docs/zos-1.10-startup.md): subsystem sequence from
   the supplied walkthrough, console message prefixes, and TSO readiness messages.
 - [Known issues](docs/known-issues.md): the deferred JES2 JOE resource-shortage

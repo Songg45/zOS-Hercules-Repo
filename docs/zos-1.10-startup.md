@@ -105,6 +105,11 @@ Once the console reports that logons are accepted, try the configured TSO entry
 from a 3270 terminal. A successful user logon confirms access through that
 terminal path; a task-start message alone does not establish it.
 
+## TCP/IP network configuration
+
+The recorded TCP/IP profile changes and successful LCS startup are documented
+in [DUZA.TCPPARMS network configuration](duza-tcpparms-networking.md).
+
 ## Deferred startup issue
 
 The reported JES2 JOE resource-shortage warning at **81% utilization** is tracked
