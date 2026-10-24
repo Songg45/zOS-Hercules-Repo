@@ -9,6 +9,13 @@ Hercules environment:
 - [`scripts/install-hercules.sh`](scripts/install-hercules.sh) builds and installs
   SDL Hercules Hyperion and reboots automatically after successful verification.
 
+Startup and operations notes:
+
+- [z/OS 1.10 startup reference](docs/zos-1.10-startup.md): subsystem sequence from
+  the supplied walkthrough, console message prefixes, and TSO readiness messages.
+- [Known issues](docs/known-issues.md): the deferred JES2 JOE resource-shortage
+  warning reported at 81% utilization.
+
 ## 1. Generate the key on the Windows client
 
 In PowerShell, generate a dedicated key pair **if you do not already have one**:
